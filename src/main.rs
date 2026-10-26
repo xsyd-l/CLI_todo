@@ -100,7 +100,7 @@ fn main() -> Result<(), String> {
                 if tasks.len() == len_before {
                     return Err(format!("error: no tasks own id as {}.\n", id));
                 } else {
-                    return Ok(());
+                    save_tasks(&tasks);
                 }
             } else {
                 return Err(format!("{} is invalid id.\n", args[2]));
@@ -110,7 +110,7 @@ fn main() -> Result<(), String> {
             if args.len() == 3 {
                 return Err(format!("error: unexpected {} found in args.\n", args[2]));
             }
-            tasks.retain(|task| task.done);
+            tasks.retain(|task| !task.done);
             save_tasks(&tasks);
             print!("all done tasks havs been removed.\n");
         },
