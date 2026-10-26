@@ -22,7 +22,7 @@ impl Task {
     }
 }
 
-const TODO_FILE: &str = "todo.json";
+const TODO_FILE: &str = "D:\\MyProject\\CLI_todo\\tasks.json";
 
 fn load_tasks() -> Vec<Task> {
     let path = Path::new(TODO_FILE);
@@ -32,6 +32,7 @@ fn load_tasks() -> Vec<Task> {
 
 fn save_tasks(tasks: &[Task]) {
     let json = serde_json::to_string_pretty(tasks).expect("error: serialize failed.");
+    std::fs::write(TODO_FILE, json).expect(&format!("error: cannot write {}.\n", TODO_FILE));
 }
 
 fn main() -> Result<(), String> {
@@ -48,6 +49,22 @@ fn main() -> Result<(), String> {
             if args.len() == 3 {
                 return Err(format!("error: unexpected {} found in args.\n",args[2]))
             }
+            if tasks.is_empty() {
+                print!("no tasks waiting to be done.\n");
+                return Ok(());
+            }
+            for task in &tasks {
+                if !task.done {
+                    continue;
+                }
+                print!("[{}]    #{} {} ({})\n", "done", task.id, task.title, task.created_at);
+            }
+            for task in &tasks {
+                if task.done {
+                    continue;
+                }
+                print!("[{}] #{} {} ({})\n", "pending", task.id, task.title, task.created_at);
+            }
         },
         "add" => {
             if args.len() == 2 {
@@ -62,17 +79,40 @@ fn main() -> Result<(), String> {
             if args.len() == 2 {
                 return Err(String::from("error: id can not be null.\n"));
             }
+            if let Ok(id) = args[2].parse::<u32>() {
+                if let Some(task) = tasks.iter_mut().find(|task| task.id == id) {
+                    task.done = true;
+                } else {
+                    return Err(format!("error: no tasks own id as {}.\n", id));
+                }
+            } else {
+                return Err(format!("error: {} is invalid id.\n", args[2]));
+            }
+            save_tasks(&tasks);
         },
         "remove" => {
             if args.len() == 2 {
                 return Err(String::from("error: id can not be null.\n"));
             }
+            if let Ok(id) = args[2].parse::<u32>() {
+                let len_before = tasks.len();
+                tasks.retain(|task| task.id != id);
+                if tasks.len() == len_before {
+                    return Err(format!("error: no tasks own id as {}.\n", id));
+                } else {
+                    return Ok(());
+                }
+            } else {
+                return Err(format!("{} is invalid id.\n", args[2]));
+            }
         },
         "clear" => {
-            if args.len() == 2 {
+            if args.len() == 3 {
                 return Err(format!("error: unexpected {} found in args.\n", args[2]));
             }
-            
+            tasks.retain(|task| task.done);
+            save_tasks(&tasks);
+            print!("all done tasks havs been removed.\n");
         },
         _=> {
 
