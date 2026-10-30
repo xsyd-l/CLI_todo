@@ -1,122 +1,231 @@
-use serde::{Serialize,Deserialize};
-use chrono::Local;
-use std::path::Path;
+use xsyd_json::Json;
+use std::io::ErrorKind;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Task {
-    id: u32,
-    title: String,
-    done: bool,
-    created_at: String,
-}
+const TASKSPATH: &str = "./task.json";
 
-impl Task {
-    fn new(id: u32, title: &str) -> Self {
-        let now = Local::now().format("%Y-%m-%d %H:%M").to_string();
-        Self {
-            id,
-            title:String::from(title),
-            done: false,
-            created_at: now,
+fn load_tasks() -> Result<Json, std::io::Error>{
+    match std::fs::read_to_string(TASKSPATH) {
+        Ok(content) => {
+            Result::Ok(Json::from(&content))
+        },
+        Err(e) => {
+            match e.kind() {
+                ErrorKind::NotFound => {
+                    return Result::Ok(Json::Null);
+                },
+                _ => {
+                    return Result::Err(e);
+                }
+            }
         }
     }
 }
 
-const TODO_FILE: &str = "D:\\MyProject\\CLI_todo\\tasks.json";
-
-fn load_tasks() -> Vec<Task> {
-    let path = Path::new(TODO_FILE);
-    let data = std::fs::read_to_string(path).expect(&format!("cannot read {}\n", TODO_FILE));
-    serde_json::from_str(&data).unwrap_or_default()
+fn save_tasks(json: &Json) -> Result<(), std::io::Error> {
+    json.write(TASKSPATH)
 }
 
-fn save_tasks(tasks: &[Task]) {
-    let json = serde_json::to_string_pretty(tasks).expect("error: serialize failed.");
-    std::fs::write(TODO_FILE, json).expect(&format!("error: cannot write {}.\n", TODO_FILE));
-}
+fn main() {
+    let args: Vec<String>= std::env::args().collect();
+    if args.len() == 2 {
+        match args[1].as_str() {
+            "list" => {
+                match load_tasks() {
+                    Ok(tasks) => {
+                        print!("{}",tasks.to_string());
+                    },
+                    _ => {
+                        eprint!("\x1b[31merror\x1b[0m: can not read \x1b[33m{}\x1b[0m\n", TASKSPATH);
+                        panic!();
+                    },
+                }
+            },
+            "-v" | "--version" => {
+                print!("\x1b[32mversion\x1b[0m: 0.1.1");
+            },
+            "-h" | "--help" => {
+                let a   = "    -v  --version: get edition informaiton\n";
+                let b   = "    -h     --help: get informaiton about more operations\n";
+                let c   = "    list   + task_id: list all tasks\n";
+                let d   = "    add    +   title: add a task on your todo list\n";
+                let e   = "    remove + task_id: remove a task from your todo list\n";
+                let e1  = "        use -c option to clear tasks marked as done\n";
+                let f   = "    done   + task_id: mark a task as done\n";
+                print!("options:\n{}{}subcommand:\n{}{}{}{}{}", a, b, c, d, e, e1, f);
+            },
+            _ => {
+                eprint!("\x1b[31merror\x1b[0m: invalid option \x1b[33m{}\x1b[0m.\ntry -h or --help for more information.\n", args[1].as_str());
+            }
+        }
+        return;
+    }
 
-fn main() -> Result<(), String> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        return Err(String::from("error: CLI_todo need args to work.\ntry -h or --help for more help.\n"));
-    }
-    if args.len() > 3 {
-        return Err(String::from("error: args are not valid.\ntry -h or --help for more help.\n"));
-    }
-    let mut tasks = load_tasks();
-    match args[1].as_str() {
-        "list" => {
-            if args.len() == 3 {
-                return Err(format!("error: unexpected {} found in args.\n",args[2]))
-            }
-            if tasks.is_empty() {
-                print!("no tasks waiting to be done.\n");
-                return Ok(());
-            }
-            for task in &tasks {
-                if !task.done {
-                    continue;
+    if args.len() == 3 {
+        match args[1].as_str() {
+            "add" => {
+                match load_tasks() {
+                    Ok(mut tasks) => {
+                        let time: String = chrono::Local::now().to_string();
+                        let id: i32 = match &tasks {
+                            Json::Array(vec) => {
+                                let mut max = 0;
+                                for json in vec {
+                                    if let Json::Object(map) = json {
+                                        if let Some(json) = map.get("id") {
+                                            if let Json::Int(id) = json {
+                                                if id > &max {
+                                                    max = id.clone();
+                                                }
+                                            } else {
+                                                eprint!("\x1b[31merror\x1b[0m:\nParsing failed because a task's id is not a valid value (it must be in the range 0–255)\n")
+                                            }
+                                        } else {
+                                            eprint!("\x1b[31merror\x1b[0m:\nParsing failed because a task's id doesn't exist.\n");
+                                            panic!();
+                                        }
+                                    } else {
+                                        eprint!("\x1b[31merror\x1b[0m: \nThe Array in \x1b[33m{}\x1b[0m is only allowed to contain JSON objects of type Object.\n", TASKSPATH);
+                                        panic!();
+                                    }
+                                }
+                                max
+                            },
+                            Json::Null => {
+                                0
+                            },
+                            _ => {
+                                eprint!("{} must be an array.\n", TASKSPATH);
+                                panic!();
+                            }
+                        } + 1;
+                        let title = args[2].as_str();
+                        let new_task = format!("{{\n\"id\":{},\n\"title\":\"{}\",\n\"done\":false,\n\"time\":\"{}\"\n}}", id, title, time);
+                        
+                        match &mut tasks {
+                            Json::Null => {
+                                tasks = Json::from(&format!("[\n{}\n]", new_task));
+                            },
+                            Json::Array(vec) => {
+                                vec.push(Json::from(&new_task));
+                            },
+                            _ => {}
+                        }
+                        match save_tasks(&tasks) {
+                            Ok(_) => {
+                                print!("\x1b[32mnew task has already been saved.\x1b[0m")
+                            },
+                            Err(e)=>{
+                                eprint!("{}", e);
+                            }
+                        }
+                    },
+                    _ => {
+                        eprint!("\x1b[31merror\x1b[0m: can not read \x1b[33m{}\x1b[0m\n", TASKSPATH);
+                        panic!();
+                    }
                 }
-                print!("[{}]    #{} {} ({})\n", "done", task.id, task.title, task.created_at);
-            }
-            for task in &tasks {
-                if task.done {
-                    continue;
-                }
-                print!("[{}] #{} {} ({})\n", "pending", task.id, task.title, task.created_at);
-            }
-        },
-        "add" => {
-            if args.len() == 2 {
-                return Err(String::from("error: title can not be null.\n"));
-            }
-            let id = tasks.iter().map(|task| task.id).max().unwrap_or(0) + 1;
-            let new_task = Task::new(id, &args[2]);
-            tasks.push(new_task);
-            save_tasks(&tasks);
-        },
-        "done" => {
-            if args.len() == 2 {
-                return Err(String::from("error: id can not be null.\n"));
-            }
-            if let Ok(id) = args[2].parse::<u32>() {
-                if let Some(task) = tasks.iter_mut().find(|task| task.id == id) {
-                    task.done = true;
+            },
+            "remove" => {
+                if let Ok(mut tasks) = load_tasks() {
+                    let aim: i32;
+                    if let Ok(aim_id) = args[2].parse::<i32>() {
+                        aim = aim_id;
+                    } else {
+                        eprint!("\x1b[31merror\x1b[0m: {} is not a valid id.\n", args[2]);
+                        panic!();
+                    }
+                    if let Json::Array(vec) = &mut tasks {
+                        vec.retain(|json| {
+                            let mut result = false;
+                                if let Json::Object(map) = json {
+                                    if let Some(json) = map.get("id") {
+                                        if let Json::Int(id) = json {
+                                            if id != &aim {
+                                                result = true;
+                                            }
+                                        } else {
+                                            eprint!("\x1b[31merror\x1b[0m:\nParsing failed because a task's id is not a valid value (it must be in the range 0–255)\n")
+                                        }
+                                    } else {
+                                        eprint!("\x1b[31merror\x1b[0m:\nParsing failed because a task's id doesn't exist.\n");
+                                        panic!();
+                                    }
+                                } else {
+                                    eprint!("\x1b[31merror\x1b[0m: \nThe Array in \x1b[33m{}\x1b[0m is only allowed to contain JSON objects of type Object.\n", TASKSPATH);
+                                    panic!();
+                                }
+                                result
+                            }
+                        );
+                    } else {
+                        eprint!("{} must be an array.\n", TASKSPATH);
+                        panic!();
+                    }
+                    match save_tasks(&tasks) {
+                        Ok(_) => {
+                            print!("\x1b[32mnew task has already been saved.\x1b[0m")
+                        },
+                        Err(e)=>{
+                            eprint!("{}", e);
+                        }
+                    }
                 } else {
-                    return Err(format!("error: no tasks own id as {}.\n", id));
+                        eprint!("\x1b[31merror\x1b[0m: can not read \x1b[33m{}\x1b[0m\n", TASKSPATH);
+                        panic!();
                 }
-            } else {
-                return Err(format!("error: {} is invalid id.\n", args[2]));
-            }
-            save_tasks(&tasks);
-        },
-        "remove" => {
-            if args.len() == 2 {
-                return Err(String::from("error: id can not be null.\n"));
-            }
-            if let Ok(id) = args[2].parse::<u32>() {
-                let len_before = tasks.len();
-                tasks.retain(|task| task.id != id);
-                if tasks.len() == len_before {
-                    return Err(format!("error: no tasks own id as {}.\n", id));
+            },
+            "done" =>{
+                if let Ok(mut tasks) = load_tasks() {
+                    let aim: i32;
+                    if let Ok(aim_id) = args[2].parse::<i32>() {
+                        aim = aim_id;
+                    } else {
+                        eprint!("\x1b[31merror\x1b[0m: {} is not a valid id.\n", args[2]);
+                        panic!();
+                    }
+                    if let Json::Array(vec) = &mut tasks {
+                        for json in vec {
+                            if let Json::Object(map) = json {
+                                if let Some(json) = map.get("id") {
+                                    if let Json::Int(id) = json {
+                                        if id == &aim {
+                                            map.insert(String::from("done"), Json::Bool(true));
+                                        }
+                                    } else {
+                                        eprint!("\x1b[31merror\x1b[0m:\nParsing failed because a task's id is not a valid value (it must be in the range 0–255)\n")
+                                    }
+                                } else {
+                                    eprint!("\x1b[31merror\x1b[0m:\nParsing failed because a task's id doesn't exist.\n");
+                                    panic!();
+                                }
+                            } else {
+                                eprint!("\x1b[31merror\x1b[0m: \nThe Array in \x1b[33m{}\x1b[0m is only allowed to contain JSON objects of type Object.\n", TASKSPATH);
+                                panic!();
+                            }
+                        }
+                    } else {
+                        eprint!("{} must be an array.\n", TASKSPATH);
+                        panic!();
+                    }
+                    match save_tasks(&tasks) {
+                        Ok(_) => {
+                            print!("\x1b[32mnew task has already been saved.\x1b[0m")
+                        },
+                        Err(e)=>{
+                            eprint!("{}", e);
+                        }
+                    }
                 } else {
-                    save_tasks(&tasks);
+                        eprint!("\x1b[31merror\x1b[0m: can not read \x1b[33m{}\x1b[0m\n", TASKSPATH);
+                        panic!();
                 }
-            } else {
-                return Err(format!("{} is invalid id.\n", args[2]));
-            }
-        },
-        "clear" => {
-            if args.len() == 3 {
-                return Err(format!("error: unexpected {} found in args.\n", args[2]));
-            }
-            tasks.retain(|task| !task.done);
-            save_tasks(&tasks);
-            print!("all done tasks havs been removed.\n");
-        },
-        _=> {
+            },
+            _ => {
+                eprint!("\x1b[31merror\x1b[0m: invalid option \x1b[33m{}\x1b[0m.\ntry -h or --help for more information.\n", args[1].as_str());
+            },
+        }
+        return;
+    }
 
-        },
-    }
-    return Ok(());
+    eprint!("\x1b[31merror\x1b[0m: too many args!\ntry -h or --help for more information.\n");
 }
