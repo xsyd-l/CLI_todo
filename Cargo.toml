@@ -1,7 +1,10 @@
 [package]
-name = "CLI_todo"
+name = "xsyd-todo"
 version = "0.1.1"
 edition = "2024"
+description = "A notepad program that interacts via the command line."
+repository = "https://github.com/xsyd-l/CLI_todo.git"
+license = "MIT"
 
 [dependencies]
 chrono = "0.4"
