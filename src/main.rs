@@ -229,9 +229,9 @@ fn main() {
                 }
                 for task in &tasks {
                     if task.done {
-                        print!("\x1b[32m#{} [{}] ({})\n{}\x1b[0m", task.id, task.done, task.created_time, task.title);
+                        print!("\x1b[32m#{} [{}] ({})\n{}\x1b[0m\n", task.id, task.done, task.created_time, task.title);
                     } else {
-                        print!("\x1b[31m#{} [{}] ({})\n{}\x1b[0m", task.id, task.done, task.created_time, task.title);
+                        print!("\x1b[31m#{} [{}] ({})\n{}\x1b[0m\n", task.id, task.done, task.created_time, task.title);
                     }
                 }
                 return;
