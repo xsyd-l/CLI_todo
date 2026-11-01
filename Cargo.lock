@@ -325,6 +325,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "xsyd-command-parser"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "154ed426bfd647f0c4b44d696274ac98b0eb4a13e9f6a126ee351bc69dc955a8"
+
+[[package]]
 name = "xsyd-json"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -332,8 +338,9 @@ checksum = "9a7c2a59cb1bc76062681c3f1507e5352920db8edde366f2ac459111765e704f"
 
 [[package]]
 name = "xsyd-todo"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
+ "xsyd-command-parser",
  "xsyd-json",
 ]
